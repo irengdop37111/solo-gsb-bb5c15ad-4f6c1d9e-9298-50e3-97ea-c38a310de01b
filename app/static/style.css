@@ -411,3 +411,94 @@ body {
   .cmp-tl-row, .cmp-tl-row.shift { grid-template-columns: 1fr; }
   .cmp-cols, .cmp-sum-row { grid-template-columns: 1fr; }
 }
+
+/* ---------------- 偏移敏感性抽屉 ---------------- */
+.sens-field { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.sens-field select {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  color: var(--text); padding: 6px 9px; font-size: 12.5px; max-width: 260px;
+}
+.sens-field input {
+  width: 100px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px;
+  color: var(--text); padding: 6px 9px; font-size: 12.5px; font-family: var(--mono);
+}
+.sens-field input:focus, .sens-field select:focus { outline: none; border-color: var(--primary); }
+
+.sens-summary {
+  display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+  font-size: 12px; color: var(--muted);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+}
+.sens-summary b { color: var(--text); }
+.sens-summary .sens-cancel { color: var(--warn); }
+.sens-summary .sens-baseline code {
+  font-family: var(--mono); font-size: 10.5px; background: var(--bg-3);
+  border-radius: 5px; padding: 1px 6px; color: #ff9b94;
+}
+.sens-notice {
+  padding: 11px 14px; border-radius: 8px; font-size: 12.5px;
+  border: 1px solid #6e5323; background: rgba(232,163,61,.1); color: #f0c273;
+}
+.sens-notice.error { border-color: #6b2f2c; background: rgba(229,83,75,.1); color: #ff9b94; }
+
+/* 区间轴 */
+.sens-axis-outer { padding: 2px 2px 0; }
+.sens-axis {
+  position: relative; height: 26px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 7px; overflow: hidden;
+}
+.sens-seg { position: absolute; top: 0; bottom: 0; cursor: pointer; opacity: .5; }
+.sens-seg:hover { opacity: .85; }
+.sens-seg.ok { background: var(--ok); }
+.sens-seg.warn { background: var(--warn); }
+.sens-seg.bad { background: var(--danger); }
+.sens-tick {
+  position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px;
+  background: #dfe7f0; opacity: .85; pointer-events: none;
+}
+.sens-current {
+  position: absolute; top: -1px; bottom: -1px; width: 0;
+  border-left: 2px dashed #fff; pointer-events: none;
+}
+.sens-axis-labels {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 10px; color: var(--muted); padding: 3px 2px 0;
+}
+
+/* 临界点一览 */
+.sens-cps { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; font-size: 11px; }
+.sens-cps-label { color: var(--muted); }
+.sens-cp {
+  font-family: var(--mono); font-size: 10.5px; padding: 1px 8px; border-radius: 9px;
+  background: var(--bg); border: 1px solid var(--line); color: #8fc0ff; cursor: default;
+}
+
+/* 区间卡片 */
+.sens-intervals { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
+.sens-card {
+  background: var(--bg); border: 1px solid var(--line); border-left-width: 3px;
+  border-radius: 8px; padding: 8px 11px; cursor: pointer; transition: border-color .15s;
+}
+.sens-card:hover { border-color: var(--primary); }
+.sens-card.ok { border-left-color: var(--ok); }
+.sens-card.warn { border-left-color: var(--warn); }
+.sens-card.bad { border-left-color: var(--danger); }
+.sens-card.current { outline: 1px dashed #4a9eff; outline-offset: 2px; }
+.sens-card-head { display: flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: 11.5px; }
+.sens-range { color: #8fc0ff; }
+.sens-cur-tag {
+  font-size: 10px; color: #8fc0ff; border: 1px solid #2b4a70;
+  border-radius: 8px; padding: 0 6px; font-family: inherit;
+}
+.sens-rep { margin-left: auto; color: var(--muted); font-size: 11px; }
+.sens-card-stats { display: flex; gap: 12px; font-size: 11px; color: var(--muted); margin: 6px 0 4px; }
+.sens-card-stats .bad { color: #ff9b94; }
+.sens-card-stats .warn { color: var(--warn); }
+.sens-diff { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; font-size: 11px; margin-top: 3px; }
+.sens-diff-label { color: var(--muted); min-width: 52px; }
+.sens-sig { font-family: var(--mono); font-size: 10.5px; padding: 0 6px; border-radius: 8px; }
+.sens-sig.added { background: rgba(229,83,75,.16); color: #ff9b94; }
+.sens-sig.removed { background: rgba(57,192,122,.16); color: #8ce0b4; }
+.sens-none { color: #5d6b7d; font-size: 10.5px; }
+.sens-apply { margin-top: 7px; }
+.sens-footnote { font-size: 11px; color: #5d6b7d; }

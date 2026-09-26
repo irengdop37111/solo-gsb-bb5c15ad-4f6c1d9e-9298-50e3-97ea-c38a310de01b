@@ -53,6 +53,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```bash
 python tests/test_engine.py      # 纯标准库，覆盖时间解析 / 冲突 / 因果环 / 假设调整全流程
 python tests/test_scenarios.py   # 纯标准库，覆盖方案快照 CRUD / 对比差异（冲突/歧义/边/时间线逆序对）
+python tests/test_sensitivity.py # 纯标准库，覆盖偏移敏感性：解析临界点 / offset 抵消 / 区间差异 / 无效输入
 ```
 
 ---
@@ -90,6 +91,24 @@ python tests/test_scenarios.py   # 纯标准库，覆盖方案快照 CRUD / 对�
 方案保存在服务端命名卷中、与案件数据一同持久化；它是**自包含快照**：
 保存后即使再改动已确认的来源假设，旧方案的重算结果也不会变化。
 「当前生效假设（含未保存调整）」可随时作为对比的一侧，无需先命名。
+
+### 进一步：偏移敏感性扫描
+
+不确定某来源的 offset 该取多少？点右上 **📈 偏移敏感性**，选择来源并输入扫描上下界：
+
+- 后端利用"估计时刻对 offset 是斜率 -1 的线性函数"这一性质，**解析求出**该来源事件
+  参与的每条约束边 `gap_lo / gap_hi` 穿越 0 的临界 offset，把扫描范围切成**边状态稳定**
+  的连续区间（区间内任意取值，全部边的 ok / boundary / impossible 判定不变）；
+- 每段取中点调用现有推理全量重算，返回该段相对**当前结果**的新增 / 消失的
+  不可能边与冲突链（含稳定签名），按区间卡片与色带轴展示；
+- **点击某段**即把其中点写入该来源的**未保存 offset** 并触发时间线重算，
+  可立即观察冲突的消失 / 转移 / 暴露，再决定是否"保存假设"；
+- 同一条边两端都属于该来源时（典型：同来源 `source_order` 时序边），两端区间随
+  offset 同步平移、gap 与 offset 无关 —— 识别为 **offset 抵消**，不制造临界点；
+- 上下界无效（非数值 / 下界 ≥ 上界 / 超出合理范围）、来源不存在、范围内无临界点、
+  临界点过密（段数超上限）时均给出明确提示，无临界点时还会指出最近的临界点位置。
+
+扫描只改变被测来源的 `clock_offset`，其余假设参数（含未保存调整）保持原样参与基线与各段重算。
 
 ---
 
@@ -193,6 +212,9 @@ gap ∈ [ lo_b - hi_a ,  hi_b - lo_a ]
   任选两套方案（或"当前生效假设"）对同一批事件分别重算，并排展示冲突链 / 歧义组的新增、消失、
   持续，顺序边 ok / boundary / impossible 的状态翻转，以及时间线位次交换；点击任意差异事件可定位
   主时间线，对比结果可导出 JSON。
+- **偏移敏感性扫描**（右上 📈）：选定来源与 offset 扫描上下界，解析求临界点并把范围切成
+  边状态稳定的连续区间；每段展示相对当前结果的新增 / 消失冲突链与不可能边（含签名），
+  点击区间把中点写入该来源未保存 offset 并即时重算。
 
 ---
 
@@ -218,6 +240,7 @@ gap ∈ [ lo_b - hi_a ,  hi_b - lo_a ]
 | GET | `/api/scenarios/current/assumptions` | 当前库存完整生效假设（另存基线预览） |
 | POST | `/api/compare` | 两套方案在同一批事件上分别重算，返回结构化差异 |
 | POST | `/api/compare/export` | 下载方案对比 JSON 证据包（侧引用可携带未保存 overrides，故为 POST） |
+| POST | `/api/sensitivity/offset-scan` | 偏移敏感性扫描：解析临界点 → 稳定区间分段 → 各段中点重算并与当前结果对比 |
 | GET | `/api/sample` | 下载内置示例 JSON |
 | POST | `/api/reset` | 清空全部数据 |
 | GET | `/api/health` | 健康检查（Compose healthcheck 使用） |
@@ -299,6 +322,34 @@ curl -o audit_result.json http://localhost:8000/api/export
   -d '{"a":{"kind":"scenario","scenario_id":1},"b":{"kind":"scenario","scenario_id":2}}' \
   -o scenario_comparison.json`
 
+`/api/sensitivity/offset-scan` 请求体与响应要点：
+
+```json
+// POST /api/sensitivity/offset-scan —— overrides 可携带页面未保存调整，作为"当前结果"基线
+{"source_id": "app-server", "lo": -120, "hi": 120, "overrides": {}}
+```
+
+```json
+{
+  "scan_type": "offset-sensitivity",
+  "range": {"lo": -120, "hi": 120},
+  "baseline": {"offset": 0.0, "offset_in_range": true,
+               "impossible_edges": [{"from": "a1", "to": "m1", "kind": "causal"}],
+               "conflicts": [{"signature": "impossible:a1->m1"}]},
+  "edges": {"total": 12, "scanned": 4, "invariant": 2},
+  "critical_points": [{"offset": 48.7, "from": "g3", "to": "a3", "which": "gap_lo"}],
+  "intervals": [{"lo": 51.3, "hi": 68.7, "representative": 60.0, "contains_current": false,
+                 "stats": {"impossible_edges": 2, "conflict_count": 2},
+                 "impossible_added": [{"from": "g3", "to": "a3"}],
+                 "conflicts_added": [{"signature": "impossible:g3->a3"}],
+                 "conflicts_removed": []}],
+  "message": null
+}
+```
+
+`edges.invariant` 即两端同属被扫描来源、offset 抵消的边数；范围内无临界点时
+`intervals` 为空、`message` 给出明确提示（含最近临界点位置）。
+
 交互式文档：启动后访问 `http://localhost:8000/docs`。
 
 ---
@@ -308,17 +359,19 @@ curl -o audit_result.json http://localhost:8000/api/export
 ```
 .
 ├── app/
-│   ├── main.py          # FastAPI 路由：导入/假设/重算/筛选/约束/方案 CRUD/对比/导出/静态页
+│   ├── main.py          # FastAPI 路由：导入/假设/重算/筛选/约束/方案 CRUD/对比/敏感性扫描/导出/静态页
 │   ├── engine.py        # 区间模型、边分类、约束传播、Tarjan 环、歧义聚类、稳定签名、导出
 │   ├── scenarios.py     # 命名假设方案快照 CRUD、双方案重算差异（冲突/歧义/边/时间线/参数）
+│   ├── sensitivity.py   # 偏移敏感性：解析临界点、offset 抵消识别、稳定区间分段与代表值重算
 │   ├── importer.py      # 多别名宽松 JSON 规范化、幂等入库、来源时序边重建
 │   ├── db.py            # SQLite 连接、建表初始化（含 scenarios 表）
 │   ├── timeutil.py      # 多格式时间戳解析（秒/毫秒/微秒/纳秒、ISO、RFC2822）
 │   ├── sample.py        # 内置示例案件
-│   └── static/          # 原生前端 index.html / style.css / app.js / compare.js
+│   └── static/          # 原生前端 index.html / style.css / app.js / compare.js / sensitivity.js
 ├── examples/login-anomaly.json
-├── tests/test_engine.py     # 纯标准库测试（11 项）
-├── tests/test_scenarios.py  # 方案快照与双方案对比测试（12 项）
+├── tests/test_engine.py      # 纯标准库测试（11 项）
+├── tests/test_scenarios.py   # 方案快照与双方案对比测试（12 项）
+├── tests/test_sensitivity.py # 偏移敏感性扫描测试（12 项）
 ├── docker/entrypoint.sh # 启动钩子：初始化数据库后拉起 uvicorn
 ├── Dockerfile
 ├── docker-compose.yml

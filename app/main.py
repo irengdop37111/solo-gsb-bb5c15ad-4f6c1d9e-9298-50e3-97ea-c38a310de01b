@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import engine, scenarios
+from . import engine, scenarios, sensitivity
 from .db import db, init_db
 from .importer import import_payload, reset_all
 
@@ -83,6 +83,13 @@ class ScenarioSide(BaseModel):
 class CompareBody(BaseModel):
     a: ScenarioSide
     b: ScenarioSide
+
+
+class SensitivityScanBody(BaseModel):
+    source_id: str
+    lo: float
+    hi: float
+    overrides: dict[str, dict[str, float | None]] = Field(default_factory=dict)
 
 
 def _scenario_exc(exc: Exception) -> HTTPException:
@@ -371,6 +378,24 @@ async def compare_export(body: CompareBody) -> JSONResponse:
         headers={"Content-Disposition":
                  'attachment; filename="scenario_comparison.json"'},
     )
+
+
+# ----------------------------------------------------- 偏移敏感性扫描
+
+@app.post("/api/sensitivity/offset-scan")
+def offset_sensitivity_scan(body: SensitivityScanBody) -> dict[str, Any]:
+    """扫描某来源 clock_offset ∈ [lo, hi]：解析临界点切出边状态稳定区间，
+    每段取中点重算，返回不可能边 / 冲突链相对当前结果的新增、消失与签名。"""
+    try:
+        return sensitivity.scan_offset_sensitivity(
+            body.source_id, body.lo, body.hi,
+            {sid: {k: v for k, v in ov.items() if v is not None}
+             for sid, ov in body.overrides.items()})
+    except sensitivity.SensitivityError as exc:
+        notfound = "不存在" in str(exc)
+        raise HTTPException(404 if notfound else 400, str(exc)) from exc
+    except scenarios.ScenarioError as exc:
+        raise _scenario_exc(exc) from exc
 
 
 # ----------------------------------------------------------------- 前端
