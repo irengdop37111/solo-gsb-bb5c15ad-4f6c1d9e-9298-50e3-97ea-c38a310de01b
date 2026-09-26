@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import engine, scenarios
+from . import engine, scenarios, sensitivity
 from .db import db, init_db
 from .importer import import_payload, reset_all
 
@@ -20,7 +20,7 @@ STATIC_DIR = BASE_DIR / "static"
 app = FastAPI(
     title="事件证据链审计台",
     description="导入多来源 JSON 事件记录，校正时钟偏差，重建可解释时间线并定位冲突链。",
-    version="1.1.0",
+    version="1.2.0",
 )
 
 
@@ -83,6 +83,13 @@ class ScenarioSide(BaseModel):
 class CompareBody(BaseModel):
     a: ScenarioSide
     b: ScenarioSide
+
+
+class SensitivityBody(BaseModel):
+    source_id: str
+    lo: Any = None                        # 扫描下界（秒），在 scan 内严格校验
+    hi: Any = None                        # 扫描上界（秒）
+    overrides: dict[str, SourceAssumption] = Field(default_factory=dict)
 
 
 def _scenario_exc(exc: Exception) -> HTTPException:
@@ -371,6 +378,24 @@ async def compare_export(body: CompareBody) -> JSONResponse:
         headers={"Content-Disposition":
                  'attachment; filename="scenario_comparison.json"'},
     )
+
+
+# ----------------------------------------------------- 偏移敏感性扫描
+
+@app.post("/api/offset-sensitivity")
+def offset_sensitivity(body: SensitivityBody) -> dict[str, Any]:
+    """偏移敏感性扫描：解析临界点 → 切稳定区间 → 逐段重算并与当前结果对比。
+
+    overrides 传页面当前（含未保存）的其它来源假设，扫描只替换目标来源的
+    clock_offset；上下界无效 / 来源不存在 / 临界点过多返回 4xx 明确提示。
+    """
+    overrides = {sid: v.model_dump(exclude_none=True)
+                 for sid, v in body.overrides.items()}
+    try:
+        return sensitivity.scan_offset(body.source_id.strip(), body.lo, body.hi,
+                                       overrides)
+    except sensitivity.SensitivityError as exc:
+        raise HTTPException(404 if "不存在" in str(exc) else 400, str(exc)) from exc
 
 
 # ----------------------------------------------------------------- 前端

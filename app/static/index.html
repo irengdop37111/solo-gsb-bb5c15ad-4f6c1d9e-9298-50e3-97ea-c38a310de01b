@@ -21,6 +21,7 @@
       ＋ 导入 JSON
     </label>
     <button class="btn" id="btn-compare">⚖ 方案对比</button>
+    <button class="btn" id="btn-sensitivity">📈 偏移敏感性</button>
     <button class="btn" id="btn-export">⬇ 导出审计结果</button>
     <button class="btn ghost danger" id="btn-reset" title="清空全部数据与假设">清空数据</button>
   </div>
@@ -124,7 +125,37 @@
   </div>
 </div>
 
+<!-- 偏移敏感性抽屉 -->
+<div id="sens-overlay" class="overlay hidden" aria-hidden="true">
+  <div class="overlay-card">
+    <div class="overlay-head">
+      <h2>📈 偏移敏感性扫描</h2>
+      <p class="subtitle">选定来源并输入 offset 扫描上下界：后端按该来源参与的约束边解析 gap 穿越 0 的临界点，
+        把范围切成边状态稳定的连续区间，逐段重算并给出不可能边 / 冲突链相对当前结果的新增与消失。</p>
+      <div class="overlay-actions">
+        <button class="btn tiny ghost" id="sens-close">✕ 关闭</button>
+      </div>
+    </div>
+
+    <div class="cmp-toolbar">
+      <div class="cmp-side-sel">
+        <span class="cmp-side-tag a">扫描来源</span>
+        <select id="sens-source"></select>
+      </div>
+      <div class="sens-range">
+        <label>下界 <input type="number" id="sens-lo" step="any"></label>
+        <label>上界 <input type="number" id="sens-hi" step="any"></label>
+      </div>
+      <button class="btn tiny primary" id="sens-run">▶ 扫描</button>
+      <span id="sens-hint" class="cmp-hint"></span>
+    </div>
+
+    <div id="sens-result" class="cmp-result"></div>
+  </div>
+</div>
+
 <script src="/static/app.js"></script>
 <script src="/static/compare.js"></script>
+<script src="/static/sensitivity.js"></script>
 </body>
 </html>
